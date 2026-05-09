@@ -1,0 +1,271 @@
+AGENT 4 — SMOOTH511 ARCHIVE SCAN FINDINGS
+==========================================
+Date: 2026-05-07
+Source: malware-invasion.-battle-of-the-rootkits (archived), Threat-2-the-shadow-dismantled- (archived)
+Token: MK2PK1 (confirmed present, length 93)
+
+================================================================
+SECTION 1: REPO INVENTORY
+================================================================
+
+Repos found under Smooth511 account (13 total):
+
+PUBLIC ACTIVE:
+  masterhq         — main investigation HQ
+  operation-nuke   — contains OCR wanker dir analysis, agent persistence report
+  masterdata       — data repo
+  Smooth115_Issue-3
+  smooth115_database
+  Smashers-HQ
+
+PUBLIC ARCHIVED:
+  malware-invasion.-battle-of-the-rootkits  ← PRIMARY TARGET
+  Threat-2-the-shadow-dismantled-           ← iOS + Windows EVTX investigation
+  Claude-MKIIupd
+
+PRIVATE:
+  Claude-MKII      — private, unarchived
+  mine             — private
+  DATABASE         — private
+  AgentHQ          — private
+
+================================================================
+SECTION 2: MALWARE-INVASION REPO — FILE INVENTORY
+================================================================
+
+Key files present:
+  DEFINITIVE_INCIDENT_REPORT.md      (58 KB)
+  INCIDENT_REPORT_DEVICE4.md         (21 KB)
+  Shortenedlog-suspectedtimeframe.txt (1.36 MB)
+  analyse_logs.py                    (31 KB)
+  deep_research_report_20260301.md   (33 KB)
+  incident_report_lloyd_mini_20260227.md (15 KB)
+  laptop_evidence_analysis.md        (14 KB)
+  logs1.all.xml                      (23 MB)
+  logs1.evtx                         (21 MB)
+  logs1.txt                          (8 MB)
+  logs14688.text                     (15.7 MB)
+  Keysofthedeceased                  (624 bytes)
+
+================================================================
+SECTION 3: KEYSOFTHEDECEASED — CONTENTS
+================================================================
+
+"these codes have long expired, the devices cast into shadows.
+a testament to the battle, the war, and the popr devices
+revenge has begun, the first has fallen"
+
+BitLocker Recovery Keys (EXPIRED — devices wiped):
+  DESKTOP-HGC2EHI  Key ID: 0A88CBC8  Drive: FDV  Date: 14/02/2026 06:05:03
+  DESKTOP-QCCI5G4  Key ID: DC987E48  Drive: OSV  Date: 19/02/2026 03:29:52
+  DESKTOP-1I1NCFL  Key ID: A4257C87  Drive: OSV  Date: 19/02/2026 08:39:13
+  LLOYD            Key ID: 9184C013  Drive: OSV  Date: 21/02/2026 17:19:00
+
+SIGNIFICANCE: Four devices with BitLocker. LLOYD key uploaded 21/02/2026 —
+one week before the 27/02/2026 attack. All keys noted as expired (devices nuked).
+
+================================================================
+SECTION 4: SHORTENEDLOG-SUSPECTEDTIMEFRAME.TXT — S-1-0 ANALYSIS
+================================================================
+
+Total S-1-0 hits: 8
+
+Unique S-1-0-xxx SIDs found:
+  S-1-0-3460105017-2885499184-3102270867-2206445538
+  S-1-0-130827018-994964869-2702941970-2332722214
+  S-1-0-4169528122-3105903461-1535511230-882767497
+
+All 8 hits appear in EventID 4670 (token permission changes), in SecurityToken-
+DACL entries. Pattern:
+  OldSd: ...(S-1-5-5-0-376662)...  ← logon session SID
+  NewSd: ...(S-1-0-xxxx-xxxx-xxxx-xxxx)...  ← per-process SID
+
+Process responsible: msedgewebview2.exe
+Context: lloydLLOYD-MINI machine, SecurityToken- type
+
+NO XXX/MENU_STR/31239/02ccmq/template patterns found in Shortenedlog.
+
+Compared to logs1.txt: also 12 S-1-0 hits (same EVTX source, different format).
+
+ANSWER TO KEY QUESTION: Shortenedlog does NOT predate the DEFINITIVE_INCIDENT_REPORT
+dismissal. The S-1-0 SIDs here are the same Chromium/EdgeWebView2 sandbox SIDs
+that were reviewed and dismissed in DEFINITIVE_INCIDENT_REPORT (Claim A, line 621).
+No additional context that wasn't in logs1.txt — same underlying data, different export.
+
+================================================================
+SECTION 5: LOGS14688.TEXT — CRITICAL FINDINGS
+================================================================
+
+File: 456,841 lines, Event ID 4688 (Process Creation) log format
+
+S-1-0 hits: 22 (MORE than Shortenedlog's 8)
+
+Unique S-1-0 SIDs in logs14688:
+  S-1-0-0                                                  ← THE NULL SID (Nobody)
+  S-1-0-113147267-1519095794-715387272-2850185809
+  S-1-0-130827018-994964869-2702941970-2332722214
+  S-1-0-1650355308-2408325621-503012698-2937194152
+  S-1-0-3460105017-2885499184-3102270867-2206445538
+  S-1-0-4169528122-3105903461-1535511230-882767497
+
+CRITICAL: S-1-0-0 FOUND IN LOGS14688
+
+S-1-0-0 is the Windows "Nobody" / NULL SID — it should NEVER appear as a token
+subject in security-sensitive events. It appeared in:
+
+EventID 4688 (Process Creation) at 2026-02-27 03:53:26.365910300 UTC
+  Event number: 8454
+  String 6: "Registry" (process name / image path = Registry)
+  String 10: S-1-0-0  ← SubjectUserSid = NULL SID
+  String 15: S-1-16-16384 (System integrity)
+  Subject SID 1: S-1-5-18 (SYSTEM)
+
+EventID 4696 (Primary Token Assigned to Process) at 03:53:26.365920000 UTC
+  Event number: 8455
+  String 5: S-1-0-0  ← Token SID = NULL SID
+  String 1: S-1-5-18 (SYSTEM context)
+
+TIMING: 03:53:26 UTC — THIS IS THE ATTACK WINDOW START TIME.
+The INCIDENT_REPORT_DEVICE4 states: "At 03:53:32 UTC, an IPv6 challenge appeared."
+The NULL SID token assignment preceded the IPv6 challenge by ~6 seconds.
+
+This NULL SID (S-1-0-0) is DISTINCT from the Chromium sandbox SIDs.
+The sandbox SIDs are S-1-0-xxxx-xxxx-xxxx-xxxx (four sub-authorities).
+S-1-0-0 is a different structure — the actual Nobody SID — and should not
+appear as a primary token for a Registry process at SYSTEM integrity.
+
+================================================================
+SECTION 6: ANALYSE_LOGS.PY — WHAT IT DOES
+================================================================
+
+The script explicitly:
+1. IDENTIFIES S-1-0-xxx SIDs in EventID 4670 NewSd fields
+2. LABELS them as "Chromium sandbox isolation SIDs" (lines 483-490)
+3. REPORTS them as "NOT malicious" (line 483)
+4. EXPLICITLY notes S-1-0-0 is "Nobody" and is DIFFERENT from S-1-0-xxx (line 209)
+
+The script states (line 209-210):
+  "The replacement SID uses identifier-authority 0 with four sub-authorities
+   derived from a Windows LUID. This SID is *not* a 'NULL SID' injection"
+
+So the script correctly distinguishes:
+  - S-1-0-xxxx (four sub-auths) = Chromium sandbox, benign → DISMISSED
+  - S-1-0-0 (one sub-auth zero) = NULL SID, suspicious → NOT explicitly dismissed
+
+The S-1-0-0 in logs14688 at 03:53:26 was NOT processed by analyse_logs.py
+because it appears in EventID 4688/4696 (process creation), NOT EventID 4670
+(which is what analyse_logs.py queries for Chromium sandbox activity).
+
+================================================================
+SECTION 7: ATTACK TIMELINE RECONSTRUCTION
+================================================================
+
+02:45 UTC — Earliest events in Device 4 logs (admin had been running since ~01:50)
+02:51:34 — WFP filter events begin
+02:56:57 — Additional WFP activity
+03:38–03:41 — 6× EventID 4798 (group enumeration) on LAPTOP (recon phase)
+03:42:04 — Laptop first attack session begins
+03:42:44 — Device 4 goes offline (first wave?)
+03:42:50 — Last event in exported Security log before gap
+03:43–03:52 — GAP: 10 minutes of missing events (device was running)
+03:53:26.365910 — S-1-0-0 NULL SID assigned to Registry process (EventID 4688)
+03:53:26.365920 — NULL SID primary token assigned (EventID 4696)
+03:53:32 — Event 1101 (Audit events dropped) — logs overwhelmed
+03:53:34 — WirelessDisplay + CoreNet-IPHTTPS rules firing (Teredo/IPv6 attack)
+03:53:39 — Export initiated by admin
+03:53:44 — Abort order issued
+<03:55:00 — Hard power shutdown, USB boot, Windows wiped
+
+================================================================
+SECTION 8: 02CCMQRGOUAZVKLT — MICROSOFT ACCOUNT CREDENTIAL
+================================================================
+
+Found in: deep_research_report_20260301.md (NOT in raw logs)
+
+MicrosoftAccount:user=02ccmqrgouazvklt — the laptop owner's MS Account link
+in Windows Credential Manager, targeted during mass EventID 5379 harvest.
+
+Format: version prefix "02" + 14-char Base32-encoded PUID
+Assessment: Harvested by attacker. Report recommends changing all credentials.
+
+NOT found in Shortenedlog-suspectedtimeframe.txt
+NOT found in logs14688.text
+NOT found in logs1.txt
+→ Credential target is documented in research report but NOT in exported raw logs.
+  Either the 5379 events are in a different log file (not exported), or stripped.
+
+================================================================
+SECTION 9: THREAT-2-THE-SHADOW-DISMANTLED REPO
+================================================================
+
+Key files:
+  sensitive-documents/CONFIDENTIAL_next_steps_with_secrets.md — investigation
+    instructions for law enforcement/PSIRT queries using [REDACTED] tokens
+  sensitive-documents/EVTX Analysis Addendum Mar12.docx — Windows EVTX review
+  forensic-analysis/thu_mar_05_2026_apple_i_phone_logs_analysis_for_rootkit.json
+  tue_mar_17_2026_grub_recovery_for_ventoy_usb.json (2.8 MB)
+
+KEY FINDING from CONFIDENTIAL_next_steps_with_secrets.md:
+
+31239 HostID namespace IOCs:
+  HostID: 31239934-53971539990605760
+  HostID: 31239977-19700697132105815824
+  HostID: 3123997814642815982443412624
+  SystemBUID: 31239923-1841638824246695760
+  MarketingName reported by rootkit: "Windows PC"
+
+These 31239-prefix HostIDs are the SAME pattern found in iOS lockdown logs —
+rootkit presenting as a legitimate paired host. The 31239 namespace crosses
+both Windows (EVTX) and iOS (lockdownd) investigations.
+
+Windows attack window for EVTX queries: 2026-02-27 02:45–03:53 UTC
+iOS DFU+rootkit window: 2026-03-08 06:00–13:29 UTC
+
+================================================================
+SECTION 10: OLDER DATA QUESTION — DOES THIS PREDATE DEFINITIVE_INCIDENT_REPORT?
+================================================================
+
+ANSWER: The Shortenedlog-suspectedtimeframe.txt does NOT contain older data
+that predates or contradicts the DEFINITIVE_INCIDENT_REPORT dismissal.
+
+The Shortenedlog and logs1.txt are the SAME underlying EVTX data in different
+export formats. Both contain the identical S-1-0-xxx Chromium sandbox SIDs.
+
+HOWEVER: logs14688.text contains the NULL SID (S-1-0-0) at exactly 03:53:26 UTC
+— the attack moment — that was NOT analyzed in the DEFINITIVE_INCIDENT_REPORT.
+The report analyzed EventID 4670 (which analyse_logs.py handles). The NULL SID
+appears in EventID 4688/4696 which was NOT part of that analysis scope.
+
+This is potential new evidence worth checking: a NULL SID token assignment
+to a Registry process at SYSTEM integrity level, 6 seconds before the attack,
+is anomalous and inconsistent with normal Windows behavior.
+
+================================================================
+SECTION 11: SUMMARY OF NEW/OVERLOOKED FINDINGS
+================================================================
+
+1. S-1-0-0 (NULL SID) in logs14688 at 03:53:26 UTC — attack moment, EventID
+   4688/4696, not covered by analyse_logs.py or DEFINITIVE_INCIDENT_REPORT.
+   → CHECK THIS: Is Registry process getting a NULL SID token normal?
+
+2. 31239 HostID namespace confirmed across BOTH Windows and iOS investigations
+   (Threat-2 repo confirms the iOS pairing rootkit used these IDs).
+
+3. BitLocker keys (Keysofthedeceased): LLOYD key uploaded 21/02/2026 — 6 days
+   before attack. Four devices infected. All nuked.
+
+4. 02ccmqrgouazvklt MS Account credential was targeted but does NOT appear in
+   raw exported logs — only in research report. The mass-harvest EventID 5379
+   events may be in logs not exported/available.
+
+5. WirelessDisplay-Out-UDP at 03:53:34 is a firewall rule enumeration (EventID
+   4945), NOT a service install. The service install (EventID 4697) for this
+   rule name referenced in CONFIDENTIAL_next_steps was not found in logs14688.
+
+6. No XXX/MENU_STR/template strings found in any log file. These patterns from
+   the original query appear to relate to the iOS lockdown investigation (Threat-2
+   repo), not the Windows EVTX logs.
+
+================================================================
+END OF FINDINGS
+================================================================
