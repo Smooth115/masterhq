@@ -1,0 +1,335 @@
+=============================================================================
+AGENT 1 FINDINGS: EventID 4670 SecurityToken DACL Analysis
+Date: 2026-02-27 (log date) | Analysis: 2026-05 | Source: logs1.all.xml
+Repo: Smooth511/malware-invasion.-battle-of-the-rootkits
+Computer: Lloyd-Mini | Total events parsed: 11,959
+=============================================================================
+
+EXECUTIVE SUMMARY
+-----------------
+Five distinct S-1-0-xxx SIDs were injected into Windows Token object DACLs
+across a 38-minute window on 2026-02-27 between 03:20 and 03:58 UTC.
+Each injection follows an IDENTICAL pattern: add ghost SID with GenericAll access,
+then strip the logon session SID 92ms later. This is token impersonation setup
+via DACL manipulation — the attacker gains full access to lloyd's session tokens.
+
+PRIMARY PROCESS: msedgewebview2.exe (4 of 5 events)
+ANOMALY: msedge.exe used for SID4 — attack pivoted to main Edge process.
+
+ObjectName is "-" for ALL events. This is EXPECTED: Windows Token objects are
+nameless kernel objects identified only by handle. The tokens are lloyd's
+OWN LOGON SESSION TOKENS — confirmed by OldSd containing lloyd's user SID.
+
+=============================================================================
+DACL INJECTION SEQUENCE — HOW THE ATTACK WORKS
+=============================================================================
+
+Each injection fires in two stages per Token handle:
+
+STAGE 1 (T+0ms): Inject S-1-0-xxx as first ACE — GenericAll access
+  OldSd: D:(A;;GA;;;lloyd)(A;;GA;;;SY)(A;;GXGR;;;S-1-5-5-0-SESSION)
+  NewSd: D:(A;;GA;;;S-1-0-xxx)(A;;RC;;;OW)(A;;GA;;;lloyd)(A;;GA;;;SY)
+          ^^^^^^^^ GHOST SID ADDED FIRST — gets GenericAll
+                               ^^^^^^^^ OW (owner) STRIPPED to ReadControl only
+                                                              ^^^^^^ SESSION SID GONE
+
+STAGE 2 (T+92ms): Ghost SID also stripped — evidence cleanup
+  NewSd: D:(A;;GA;;;lloyd)(A;;GA;;;SY)
+  [Session SID permanently removed. Ghost SID window = ~92ms]
+
+Effect: The S-1-0-xxx entity had a ~92ms window with FULL ACCESS (GenericAll)
+to lloyd's token — enough to duplicate/impersonate the token.
+
+=============================================================================
+EVENT-BY-EVENT ANALYSIS
+=============================================================================
+
+--- EVENT GROUP 1: S-1-0-113147267-1519095794-715387272-2850185809 ---
+
+RecordID : 148479 (Handle 0x7a4) + 148480 (Handle 0x7a8)
+Timestamp: 2026-02-27T03:20:32.499496800Z / .499528500Z  [32µs apart]
+Cleanup  : 148481 (03:20:32.591483700Z) + 148482 (.591564100Z)  [92ms later]
+
+Subject  : lloyd (S-1-5-21-68328329-1459935384-2218511726-1001)
+LogonId  : 0x0000000000056fbc
+Process  : C:\Program Files (x86)\Microsoft\EdgeWebView\Application\145.0.3800.70\msedgewebview2.exe
+ProcessID: 0x0000000000002ea4 (decimal: 11940)
+ObjectType: Token | ObjectName: - (nameless kernel object)
+
+OldSd  : D:(A;;GA;;;S-1-5-21-68328329-1459935384-2218511726-1001)(A;;GA;;;SY)(A;;GXGR;;;S-1-5-5-0-354768)
+NewSd  : D:(A;;GA;;;S-1-0-113147267-1519095794-715387272-2850185809)(A;;RC;;;OW)(A;;GA;;;S-1-5-21-68328329-1459935384-2218511726-1001)(A;;GA;;;SY)
+Cleanup: D:(A;;GA;;;S-1-5-21-68328329-1459935384-2218511726-1001)(A;;GA;;;SY)
+
+Context: Previous 4670s (148474-148478) are benign services.exe service token
+changes. The msedgewebview2 DACL injection appears cold — no warm-up activity
+from the same process before this event.
+
+--- EVENT GROUP 2: S-1-0-1650355308-2408325621-503012698-2937194152 ---
+
+RecordID : 149336 (Handle 0x7a4) + 149337 (Handle 0x7a8)
+Timestamp: 2026-02-27T03:23:54.347857100Z / .347891800Z  [34µs apart]
+Cleanup  : 149338 (03:23:54.399097500Z) + 149339 (.399144900Z)  [51ms later]
+
+Subject  : lloyd (S-1-5-21-68328329-1459935384-2218511726-1001)
+LogonId  : 0x0000000000056fbc  [SAME logon session as Event Group 1]
+Process  : C:\Program Files (x86)\Microsoft\EdgeWebView\Application\145.0.3800.70\msedgewebview2.exe
+ProcessID: 0x0000000000003478 (decimal: 13432)  [DIFFERENT PID from Group 1]
+ObjectType: Token | ObjectName: -
+
+OldSd  : D:(A;;GA;;;S-1-5-21-68328329-1459935384-2218511726-1001)(A;;GA;;;SY)(A;;GXGR;;;S-1-5-5-0-354768)
+NewSd  : D:(A;;GA;;;S-1-0-1650355308-2408325621-503012698-2937194152)(A;;RC;;;OW)(A;;GA;;;S-1-5-21-68328329-1459935384-2218511726-1001)(A;;GA;;;SY)
+Cleanup: D:(A;;GA;;;S-1-5-21-68328329-1459935384-2218511726-1001)(A;;GA;;;SY)
+
+Note: Same handles (0x7a4, 0x7a8) as Group 1 but DIFFERENT PID — new msedgewebview2
+process instance spawned. Same logon session. 3min 22sec after first attack.
+Records 149334-149335 (03:23:50) show warm-up cleanup DACL events from same process
+just 4 seconds before injection.
+
+Handles 0x7a4 and 0x7a8: These are persistent across groups 1 & 2 for the same
+logon session — strongly suggests these are the primary impersonation tokens for
+lloyd's session 0x56fbc.
+
+--- EVENT GROUP 3: S-1-0-3460105017-2885499184-3102270867-2206445538 ---
+
+RecordID : 155093 (Handle 0x790) + 155094 (Handle 0x794)
+Timestamp: 2026-02-27T03:53:52.239793500Z / .239846300Z  [52µs apart]
+Cleanup  : 155095 (03:53:52.369497000Z) + 155096 (.369555100Z)  [129ms later]
+
+Subject  : lloyd (S-1-5-21-68328329-1459935384-2218511726-1001)
+LogonId  : 0x000000000005c1f1  [NEW logon session — lloyd re-authenticated]
+Process  : C:\Program Files (x86)\Microsoft\EdgeWebView\Application\145.0.3800.70\msedgewebview2.exe
+ProcessID: 0x00000000000027d0 (decimal: 10192)
+ObjectType: Token | ObjectName: -
+
+OldSd  : D:(A;;GA;;;S-1-5-21-68328329-1459935384-2218511726-1001)(A;;GA;;;SY)(A;;GXGR;;;S-1-5-5-0-376662)
+NewSd  : D:(A;;GA;;;S-1-0-3460105017-2885499184-3102270867-2206445538)(A;;RC;;;OW)(A;;GA;;;S-1-5-21-68328329-1459935384-2218511726-1001)(A;;GA;;;SY)
+Cleanup: D:(A;;GA;;;S-1-5-21-68328329-1459935384-2218511726-1001)(A;;GA;;;SY)
+
+CRITICAL: LogonId changed from 0x56fbc → 0x5c1f1 and session SID changed from
+S-1-5-5-0-354768 → S-1-5-5-0-376662. Lloyd created a NEW logon session between
+03:23 and 03:53. The attacker attacks the new session immediately.
+
+CRITICAL: Records 155088-155092 (03:53:50, just 2 SECONDS before this injection):
+  - EventID 4948 (firewall rule exception changed)
+  - EventID 5449 (firewall filter changed)
+  - EventID 4946 (firewall rule added to exception list) — TWO instances
+  - EventID 5449 (second firewall filter change)
+  The attacker modified Windows Firewall 2 seconds before the DACL injection.
+  This sequence (firewall open → token DACL) is a classic privilege escalation
+  setup: open the exfil path, then grab the token.
+
+--- EVENT GROUP 4: S-1-0-130827018-994964869-2702941970-2332722214 ---
+
+RecordID : 155151 (Handle 0x9a4) + 155152 (Handle 0x9c8)
+Timestamp: 2026-02-27T03:57:10.301369300Z / .301432100Z  [62µs apart]
+Cleanup  : 155153 (03:57:10.356310500Z) + 155154 (.356339800Z)  [55ms later]
+
+Subject  : lloyd (S-1-5-21-68328329-1459935384-2218511726-1001)
+LogonId  : 0x000000000005c1f1  [Same as Group 3]
+Process  : C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe  *** DIFFERENT ***
+ProcessID: 0x0000000000002f30 (decimal: 12080)
+ObjectType: Token | ObjectName: -
+
+OldSd  : D:(A;;GA;;;S-1-5-21-68328329-1459935384-2218511726-1001)(A;;GA;;;SY)(A;;GXGR;;;S-1-5-5-0-376662)
+NewSd  : D:(A;;GA;;;S-1-0-130827018-994964869-2702941970-2332722214)(A;;RC;;;OW)(A;;GA;;;S-1-5-21-68328329-1459935384-2218511726-1001)(A;;GA;;;SY)
+Cleanup: D:(A;;GA;;;S-1-5-21-68328329-1459935384-2218511726-1001)(A;;GA;;;SY)
+
+!!ANOMALY!!: This is the ONLY event using msedge.exe (main browser) instead of
+msedgewebview2.exe. The attack PIVOTED from the embedded WebView component to
+the main Edge browser process. This indicates:
+  a) The exploit code was injected into / executed from the main Edge process
+  b) OR the attacker had secondary code running in Edge itself
+  c) The same S-1-0-xxx injection technique — same author, same tool
+Records 155146-155150 (03:55:45 → 03:56:54): msedgewebview2 DACL cleanup events
+immediately preceding this msedge.exe injection — same session, transition visible.
+
+--- EVENT GROUP 5: S-1-0-4169528122-3105903461-1535511230-882767497 ---
+
+RecordID : 155187 (Handle 0x764) + 155188 (Handle 0x754)
+Timestamp: 2026-02-27T03:58:41.646504300Z / .646550300Z  [46µs apart]
+Cleanup  : 155189 (03:58:41.693868500Z) + 155190 (.693924100Z)  [47ms later]
+
+Subject  : lloyd (S-1-5-21-68328329-1459935384-2218511726-1001)
+LogonId  : 0x000000000005c1f1  [Same as Groups 3 & 4]
+Process  : C:\Program Files (x86)\Microsoft\EdgeWebView\Application\145.0.3800.70\msedgewebview2.exe
+ProcessID: 0x00000000000013d0 (decimal: 5072)  [Yet another new PID]
+ObjectType: Token | ObjectName: -
+
+OldSd  : D:(A;;GA;;;S-1-5-21-68328329-1459935384-2218511726-1001)(A;;GA;;;SY)(A;;GXGR;;;S-1-5-5-0-376662)
+NewSd  : D:(A;;GA;;;S-1-0-4169528122-3105903461-1535511230-882767497)(A;;RC;;;OW)(A;;GA;;;S-1-5-21-68328329-1459935384-2218511726-1001)(A;;GA;;;SY)
+Cleanup: D:(A;;GA;;;S-1-5-21-68328329-1459935384-2218511726-1001)(A;;GA;;;SY)
+
+Context: Record 155186 (03:58:39, 2 seconds before): services.exe DACL change for
+a service token. Record 155183 (03:58:05): another services.exe service token DACL.
+The attack fires again 1min 31sec after Group 4. Five distinct attacks in 38 minutes.
+
+=============================================================================
+CORRELATED EVENTS: 4656, 4663, 4658, 4624
+=============================================================================
+
+EventID 4624 (Logon): ZERO events in this log file.
+EventID 4656 (Object Handle Requested): ZERO events in this log file.
+EventID 4663 (Object Access Attempt): ZERO events in this log file.
+EventID 4658 (Handle Closed): ZERO events in this log file.
+
+Log file event ID distribution:
+  EventID 5447: 7218  (WFP filter change)
+  EventID 5449: 3809  (WFP callout change)
+  EventID 4670: 344   (Permission change) ← our target
+  EventID 4957: 154   (Firewall rule exception not applied)
+  EventID 4945: 149   (Firewall rule listed)
+  EventID 4946:  69   (Firewall exception added)
+  EventID 4948:  63   (Firewall rule changed)
+  EventID 5441:  48   (WFP filter added)
+  EventID 5446:  40   (WFP filter changed)
+  EventID 4947:  32   (Firewall rule modified)
+  EventID 4688:  11   (Process created)
+  EventID 5448:   3   (WFP provider context changed)
+  EventID 5450:   3   (WFP sub-layer changed)
+  [+ misc: 4953, 4954, 5443, 4950, 1101, 4696, 4826]
+
+The log export does NOT include object access auditing or authentication events.
+Recommend extracting a separate log with EventIDs 4624, 4634, 4648, 4656, 4663,
+4658 from the same timeframe to find token USE after DACL setup.
+
+=============================================================================
+TIMELINE RECONSTRUCTION
+=============================================================================
+
+03:14:29  - 4670 services.exe: legitimate service token DACL changes
+03:15:08  - 4670 services.exe: same
+03:17:04  - 4670 services.exe: same
+03:20:28  - 4670 services.exe: last benign event before attack
+03:20:32.499  *** ATTACK 1 *** S-1-0-113147267... [msedgewebview2 PID 11940, LogonId 0x56fbc]
+03:20:32.591  Cleanup 1 — session SID stripped
+03:23:50.967  msedgewebview2 DACL warm-up (cleanup events, new PID 13432)
+03:23:54.347  *** ATTACK 2 *** S-1-0-1650355308... [msedgewebview2 PID 13432, LogonId 0x56fbc]
+03:23:54.399  Cleanup 2 — session SID stripped
+
+[~30 MINUTE GAP — lloyd re-authenticates, new logon session 0x5c1f1]
+
+03:53:50.032  4948/5449/4946 FIREWALL RULES CHANGED (2 seconds before attack)
+03:53:52.239  *** ATTACK 3 *** S-1-0-3460105017... [msedgewebview2 PID 10192, LogonId 0x5c1f1]
+03:53:52.369  Cleanup 3 — session SID stripped
+03:55:45  - 03:56:54  msedgewebview2 DACL activity (inter-attack)
+03:57:10.301  *** ATTACK 4 *** S-1-0-130827018... [msedge.exe PID 12080, LogonId 0x5c1f1] ← PIVOT
+03:57:10.356  Cleanup 4 — session SID stripped
+03:57:34  - 03:58:05  mixed DACL activity
+03:58:41.646  *** ATTACK 5 *** S-1-0-4169528122... [msedgewebview2 PID 5072, LogonId 0x5c1f1]
+03:58:41.693  Cleanup 5 — session SID stripped
+
+=============================================================================
+THE S-1-0-xxx SIDS: WHAT ARE THEY?
+=============================================================================
+
+S-1-0 = NULL SID authority (identifier authority 0). No legitimate Windows
+service or user account uses S-1-0 with 4-part sub-authorities.
+
+Legitimate uses of S-1-0-0 = "Nobody" (well-known null SID, ZERO sub-authorities).
+These SIDs (S-1-0 with FOUR large random-looking sub-authorities) do NOT exist
+in any Microsoft SID scheme. They are fabricated identifiers.
+
+The sub-authority values appear pseudo-random:
+  113147267-1519095794-715387272-2850185809
+  1650355308-2408325621-503012698-2937194152
+  3460105017-2885499184-3102270867-2206445538
+  130827018-994964869-2702941970-2332722214
+  4169528122-3105903461-1535511230-882767497
+
+Pattern: 5 different SIDs used across 5 attacks — each attack uses a fresh SID.
+This is deliberate evasion: rotating the SID means no single IOC can block all
+instances. The attacker generates unique fake SIDs per attack cycle.
+
+The entity owning these SIDs could be:
+  - A process running under an injected/custom token with fabricated SID
+  - A kernel-level component that generates its own SID for token access
+  - A remote process accessing the token during the 47-92ms window
+
+=============================================================================
+ACCESS RIGHTS BREAKDOWN (DACL ACE FLAGS)
+=============================================================================
+
+GA  = GENERIC_ALL  (0x10000000) — full access, can do anything to the token
+RC  = READ_CONTROL (0x00020000) — read security descriptor only
+GXGR = GENERIC_EXECUTE|GENERIC_READ — can use/query token, cannot modify
+
+Original DACL (pre-attack):
+  lloyd:     GA   — owner has full control
+  SYSTEM:    GA   — kernel has full control
+  SessionID: GXGR — current logon session can execute/read the token
+
+Post-injection DACL (during 47-129ms window):
+  S-1-0-xxx: GA   — *** ghost entity has FULL CONTROL ***
+  Owner:     RC   — owner demoted to read-only (cannot modify token)
+  lloyd:     GA   — user SID preserved
+  SYSTEM:    GA   — SYSTEM preserved
+  [SessionID REMOVED]
+
+Post-cleanup DACL:
+  lloyd:     GA
+  SYSTEM:    GA
+  [SessionID still removed — PERMANENT side effect of the attack]
+
+The permanent removal of the logon session SID from the token DACL means
+lloyd's session can no longer properly assert read/execute rights on its own
+tokens through the normal S-1-5-5-0-SESSION mechanism. This is a persistent
+modification even after the ghost SID window closes.
+
+=============================================================================
+KEY FINDINGS SUMMARY
+=============================================================================
+
+1. ObjectName for ALL events: "-" (Token kernel objects have no name — expected)
+   The OBJECT is lloyd's own logon session tokens, identified by handle only.
+
+2. Process confirmed: msedgewebview2.exe (4/5 events) + msedge.exe (1/5 events)
+   msedgewebview2 version: 145.0.3800.70
+
+3. Subject: user "lloyd" in all cases — the attack runs AS lloyd but installs
+   ghost access for an entity that is NOT lloyd.
+
+4. Two logon sessions targeted:
+   - Session 0x56fbc (token session S-1-5-5-0-354768): Attacks 1 & 2
+   - Session 0x5c1f1 (token session S-1-5-5-0-376662): Attacks 3, 4 & 5
+
+5. FireWall rule changes 2 seconds before Attack 3 — attacker opened network path
+   before grabbing token access.
+
+6. Attack 4 pivot to msedge.exe — the main browser process is also compromised,
+   not just the embedded WebView component.
+
+7. Each attack uses a fresh S-1-0-xxx SID — deliberate IOC rotation.
+
+8. The 4670 "cleanup" events happen 47-129ms after injection. The attacker does
+   NOT need long — token duplication is essentially instant once you have GA access.
+   The cleanup is EVIDENCE REDUCTION, not a reversal of harm.
+
+9. No 4624/4656/4663/4658 events in this log — token USE not captured here.
+   The actual impersonation/access using the stolen token would appear as
+   network logon events (Type 3) or special privilege events (4672) elsewhere.
+
+10. Total tokens DACL'd: 10 token handles (2 per attack × 5 attacks).
+    Unique process instances making changes: 5 (different PIDs each time).
+
+=============================================================================
+RECOMMENDED FURTHER INVESTIGATION
+=============================================================================
+
+1. Pull EventID 4624 log from same timeframe — look for Type 9 (NewCredentials)
+   or Type 3 (Network) logons using lloyd's identity near 03:20, 03:23, 03:53,
+   03:57, 03:58 UTC on 2026-02-27.
+
+2. Pull EventID 4672 (special privilege assigned) — if token impersonation worked,
+   this fires when the ghost token is assigned to a process.
+
+3. Pull EventID 4688 full log for the same window — correlate PID 11940, 13432,
+   10192, 12080, 5072 to understand parent processes and command lines.
+
+4. Check process memory dumps for msedgewebview2.exe instances at the attack times
+   — the code injecting the DACL changes must be running inside those processes.
+
+5. The S-1-0-xxx SIDs: search for any process creation events (4688) where the
+   token SID or parent SID matches these values — that's the attacker's process.
+
+6. Firewall events 155088-155092 (03:53:50): identify what rule was added/deleted.
+   This may reveal the exfiltration destination or C2 address.
